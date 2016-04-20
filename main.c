@@ -25,13 +25,12 @@ typedef struct frame_table_entry {
 int ALGORITHM;
 int NFRAMES;
 frame_table_entry *FRAMETABLE;
+struct disk *DISK;
 
 void page_fault_handler( struct page_table *pt, int page )
 {
 		
 	printf("page fault on page #%d\n",page);
-
-	int frame;
 
 	//first, check if page is already in physical memory
 	//if so, then just set its bits to read/write
@@ -43,48 +42,54 @@ void page_fault_handler( struct page_table *pt, int page )
 	} else {
 
 	//else, page is not already in memory, so need to set read bits
-		
-		//rand
-		if (ALGORITHM == 1) {
-			frame = lrand48() % NFRAMES;
+		//first check to see if there is an empty frame
+
+		int frame = -1;
+		int i;
+		for (i=0; i<NFRAMES; i++) {
+			if (FRAMETABLE[i].page == -1) {
+				frame = i;
+			}
 		}
 
-		//fifo
-		if (ALGORITHM == 2) {
-			int i;
+		//if there is no empty frame, then you need to use an algorithm
 
-			frame = 0;
+		if (frame == -1) {
 
-			//select frame
-			for (i=0; i<NFRAMES; i++) {
-				//if the frame's count is equal to -1, it is not used
-				if (FRAMETABLE[i].count == -1) {
-					frame = i;
-				//else if the current selected frame is not empty, then check and see which frame has the higher count
-				} else if (FRAMETABLE[frame].count != -1){
+		
+			//rand
+			if (ALGORITHM == 1) {
+				frame = lrand48() % NFRAMES;
+			}
+
+			//fifo
+			if (ALGORITHM == 2) {
+				frame = 0;
+				//select frame by choosing the one with the highest count
+				for (i=0; i<NFRAMES; i++) {
 					if (FRAMETABLE[i].count > FRAMETABLE[frame].count) {
 						frame = i;
 					}
 
 				}
-
 			}
+		}
 
-			//set count for selected frame to 1
-			FRAMETABLE[frame].count = 1;
-			FRAMETABLE[frame].page = page;
+		//set count for selected frame to 1
+		FRAMETABLE[frame].count = 1;
+		FRAMETABLE[frame].page = page;
 
-			//increment counts that are already > 0 (except for count for frame)
-			for (i=0; i<NFRAMES; i++) {
-				if (FRAMETABLE[i].count > 0 && i!=frame) {
-					FRAMETABLE[i].count++;
-				}
+		//increment counts that are already > 0 (except for count for frame)
+		for (i=0; i<NFRAMES; i++) {
+			if (FRAMETABLE[i].count > 0 && i!=frame) {
+				FRAMETABLE[i].count++;
 			}
 		}
 
 		printf("Selected frame: %i\n", frame);
 		
 		page_table_set_entry(pt, page, frame, PROT_READ);
+		disk_read(DISK, page, &page_table_get_physmem(pt)[3*BLOCK_SIZE]);
 	}
 
 }
@@ -113,8 +118,8 @@ int main( int argc, char *argv[] )
 
 	//need to get page replacement algorithm
 
-	struct disk *disk = disk_open("myvirtualdisk",npages);
-	if(!disk) {
+	DISK = disk_open("myvirtualdisk",npages);
+	if(!DISK) {
 		fprintf(stderr,"couldn't create virtual disk: %s\n",strerror(errno));
 		return 1;
 	}
@@ -162,7 +167,7 @@ int main( int argc, char *argv[] )
 
 	free (FRAMETABLE);
 	page_table_delete(pt);
-	disk_close(disk);
+	disk_close(DISK);
 
 	return 0;
 }
