@@ -32,7 +32,7 @@ frame_table_entry *FRAMETABLE;
 struct disk *DISK;
 int NPAGEFAULTS;
 int NDISKWRITES;
-
+int NDISKREADS;
 
 void page_fault_handler( struct page_table *pt, int page )
 {
@@ -117,6 +117,7 @@ void manage_memory(int page, int frame, int current_page, struct page_table *pt)
 	}
 	
 	//read from disk and update page table
+	NDISKREADS++;
 	disk_read(DISK, page, &page_table_get_physmem(pt)[frame*BLOCK_SIZE]);
 	page_table_set_entry(pt, page, frame, PROT_READ);
 }
@@ -147,6 +148,7 @@ int main( int argc, char *argv[] )
 
 	NPAGEFAULTS = 0;
 	NDISKWRITES = 0;
+	NDISKREADS = 0;
 
 	int npages = atoi(argv[1]);
 	int nframes = atoi(argv[2]);
@@ -217,6 +219,7 @@ int main( int argc, char *argv[] )
 	disk_close(DISK);
 
 	printf("Total number of page faults: %i\n", NPAGEFAULTS);
+	printf("Total number of disk reads: %i\n", NDISKREADS);
 	printf("Total number of disk writes: %i\n", NDISKWRITES);
 
 	return 0;
