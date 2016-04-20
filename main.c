@@ -26,11 +26,15 @@ int ALGORITHM;
 int NFRAMES;
 frame_table_entry *FRAMETABLE;
 struct disk *DISK;
+int NPAGEFAULTS;
+int NDISKWRITES;
 
 void page_fault_handler( struct page_table *pt, int page )
 {
+	//increment NPAGEFAULTS
+	NPAGEFAULTS++;
 		
-	printf("page fault on page #%d\n",page);
+	//printf("page fault on page #%d\n",page);
 
 	//first, check if page is already in physical memory
 	//if so, then just set its bits to read/write
@@ -40,35 +44,41 @@ void page_fault_handler( struct page_table *pt, int page )
 		//page is already in memory, so set read/write bits
 		page_table_set_entry(pt, page, f, PROT_READ|PROT_WRITE);
 	} else {
-
-	//else, page is not already in memory, so need to set read bits
-		//first check to see if there is an empty frame
-
 		int frame = -1;
-		int i;
-		for (i=0; i<NFRAMES; i++) {
-			if (FRAMETABLE[i].page == -1) {
-				frame = i;
+		//else, page is not already in memory, so need to set read bits
+
+		//if there are more frames than pages, then each page maps to its own frame
+		if (NFRAMES > page_table_get_npages(pt)) {
+			frame = page;
+		} else {
+			//else, you need to find a free frame
+			//first check to see if there is an empty frame
+
+			int i;
+			for (i=0; i<NFRAMES; i++) {
+				if (FRAMETABLE[i].page == -1) {
+					frame = i;
+				}
 			}
-		}
 
-		//if there is no empty frame, then you need to use an algorithm
+			//if there is no empty frame, then you need to use an algorithm
 
-		if (frame == -1) {
-			//rand
-			if (ALGORITHM == 1) {
-				frame = lrand48() % NFRAMES;
-			}
+			if (frame == -1) {
+				//rand
+				if (ALGORITHM == 1) {
+					frame = lrand48() % NFRAMES;
+				}
 
-			//fifo
-			if (ALGORITHM == 2) {
-				frame = 0;
-				//select frame by choosing the one with the highest count
-				for (i=0; i<NFRAMES; i++) {
-					if (FRAMETABLE[i].count > FRAMETABLE[frame].count) {
-						frame = i;
+				//fifo
+				if (ALGORITHM == 2) {
+					frame = 0;
+					//select frame by choosing the one with the highest count
+					for (i=0; i<NFRAMES; i++) {
+						if (FRAMETABLE[i].count > FRAMETABLE[frame].count) {
+							frame = i;
+						}
+
 					}
-
 				}
 			}
 		}
@@ -77,16 +87,17 @@ void page_fault_handler( struct page_table *pt, int page )
 		FRAMETABLE[frame].count = 1;
 		int current_page = FRAMETABLE[frame].page;
 		FRAMETABLE[frame].page = page;
-		printf("current: %i, page: %i\n", current_page, page);
+		//printf("current: %i, page: %i\n", current_page, page);
 
 		//increment counts that are already > 0 (except for count for frame)
+		int i;
 		for (i=0; i<NFRAMES; i++) {
 			if (FRAMETABLE[i].count > 0 && i!=frame) {
 				FRAMETABLE[i].count++;
 			}
 		}
 
-		printf("Selected frame: %i\n", frame);
+		//printf("Selected frame: %i\n", frame);
 
 		//check if the block is dirty if current page is != -1
 		//if so, write data to disk
@@ -96,6 +107,7 @@ void page_fault_handler( struct page_table *pt, int page )
 			page_table_get_entry(pt, current_page, &f2, &b2);
 			if (b2 == (PROT_READ|PROT_WRITE)) {
 				disk_write(DISK, current_page, &page_table_get_physmem(pt)[frame*BLOCK_SIZE]);
+				NDISKWRITES++;
 			}
 			page_table_set_entry(pt, current_page, 0, 0);
 		}
@@ -113,6 +125,9 @@ int main( int argc, char *argv[] )
 		printf("use: virtmem <npages> <nframes> <rand|fifo|custom> <sort|scan|focus>\n");
 		return 1;
 	}
+
+	NPAGEFAULTS = 0;
+	NDISKWRITES = 0;
 
 	int npages = atoi(argv[1]);
 	int nframes = atoi(argv[2]);
@@ -146,7 +161,7 @@ int main( int argc, char *argv[] )
 
 	char *virtmem = page_table_get_virtmem(pt);
 
-	char *physmem = page_table_get_physmem(pt);
+	//char *physmem = page_table_get_physmem(pt);
 
 	//FRAMETABLE keeps track of counts for each frame
 	FRAMETABLE = malloc(NFRAMES * sizeof(frame_table_entry));
@@ -172,7 +187,7 @@ int main( int argc, char *argv[] )
 
 	}
 
-	page_table_print(pt);
+//	page_table_print(pt);
 
 //	for (i=0; i<NFRAMES; i++) {
 //		printf("%i\n", FRAMETABLE[i].page);
@@ -181,6 +196,9 @@ int main( int argc, char *argv[] )
 	free (FRAMETABLE);
 	page_table_delete(pt);
 	disk_close(DISK);
+
+	printf("Total number of page faults: %i\n", NPAGEFAULTS);
+	printf("Total number of disk writes: %i\n", NDISKWRITES);
 
 	return 0;
 }
