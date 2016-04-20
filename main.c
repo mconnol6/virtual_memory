@@ -23,6 +23,7 @@ typedef struct frame_table_entry {
 
 void update_frame_table(int frame, int page);
 void manage_memory(int page, int frame, int current_page, struct page_table *pt);
+int fifo();
 
 //global variables
 int ALGORITHM;
@@ -38,19 +39,18 @@ void page_fault_handler( struct page_table *pt, int page )
 	//increment NPAGEFAULTS
 	NPAGEFAULTS++;
 		
-	//printf("page fault on page #%d\n",page);
-
 	//first, check if page is already in physical memory
 	//if so, then just set its bits to read/write
 	int f, b;
 	page_table_get_entry(pt, page, &f, &b);
+
 	if (b != 0) {
 		//page is already in memory, so set read/write bits
 		page_table_set_entry(pt, page, f, PROT_READ|PROT_WRITE);
 	} else {
 		int frame = -1;
-		//else, page is not already in memory, so need to set read bits
 
+		//else, page is not already in memory, so need to set read bits
 		//if there are more frames than pages, then each page maps to its own frame
 		if (NFRAMES > page_table_get_npages(pt)) {
 			frame = page;
@@ -75,14 +75,7 @@ void page_fault_handler( struct page_table *pt, int page )
 
 				//fifo
 				if (ALGORITHM == 2) {
-					frame = 0;
-					//select frame by choosing the one with the highest count
-					for (i=0; i<NFRAMES; i++) {
-						if (FRAMETABLE[i].count > FRAMETABLE[frame].count) {
-							frame = i;
-						}
-
-					}
+					frame = fifo();
 				}
 			}
 		}
@@ -90,9 +83,22 @@ void page_fault_handler( struct page_table *pt, int page )
 		int current_page = FRAMETABLE[frame].page;
 		update_frame_table(frame, page);
 		manage_memory(page, frame, current_page, pt);
-
 	}
 
+}
+
+int fifo() {
+
+	int frame = 0;
+	int i;
+	//select frame by choosing the one with the highest count
+	for (i=0; i<NFRAMES; i++) {
+		if (FRAMETABLE[i].count > FRAMETABLE[frame].count) {
+			frame = i;
+		}
+
+	}
+	return frame;
 }
 
 void manage_memory(int page, int frame, int current_page, struct page_table *pt) {
@@ -121,7 +127,6 @@ void update_frame_table(int frame, int page) {
 	//set count for selected frame to 1
 	FRAMETABLE[frame].count = 1;
 	FRAMETABLE[frame].page = page;
-	//printf("current: %i, page: %i\n", current_page, page);
 
 	//increment counts that are already > 0 (except for count for frame)
 	int i;
