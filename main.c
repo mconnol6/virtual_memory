@@ -33,62 +33,60 @@ void page_fault_handler( struct page_table *pt, int page )
 
 	int frame;
 
-	//rand
-	if (ALGORITHM == 1) {
-		frame = lrand48() % NFRAMES;
-	}
+	//first, check if page is already in physical memory
+	//if so, then just set its bits to read/write
+	int f, b;
+	page_table_get_entry(pt, page, &f, &b);
+	if (b != 0) {
+		//page is already in memory, so set read/write bits
+		page_table_set_entry(pt, page, f, PROT_READ|PROT_WRITE);
+	} else {
 
-	//fifo
-	if (ALGORITHM == 2) {
-		int i;
+	//else, page is not already in memory, so need to set read bits
+		
+		//rand
+		if (ALGORITHM == 1) {
+			frame = lrand48() % NFRAMES;
+		}
 
-		frame = 0;
+		//fifo
+		if (ALGORITHM == 2) {
+			int i;
 
-		//select frame
-		for (i=0; i<NFRAMES; i++) {
-			//if the frame's count is equal to -1, it is not used
-			if (FRAMETABLE[i].count == -1) {
-				frame = i;
-			//else if the current selected frame is not empty, then check and see which frame has the higher count
-			} else if (FRAMETABLE[frame].count != -1){
-				if (FRAMETABLE[i].count > FRAMETABLE[frame].count) {
+			frame = 0;
+
+			//select frame
+			for (i=0; i<NFRAMES; i++) {
+				//if the frame's count is equal to -1, it is not used
+				if (FRAMETABLE[i].count == -1) {
 					frame = i;
+				//else if the current selected frame is not empty, then check and see which frame has the higher count
+				} else if (FRAMETABLE[frame].count != -1){
+					if (FRAMETABLE[i].count > FRAMETABLE[frame].count) {
+						frame = i;
+					}
+
 				}
 
 			}
 
-		}
+			//set count for selected frame to 1
+			FRAMETABLE[frame].count = 1;
+			FRAMETABLE[frame].page = page;
 
-		//set count for selected frame to 1
-		FRAMETABLE[frame].count = 1;
-		FRAMETABLE[frame].page = page;
-
-		//increment counts that are already > 0 (except for count for frame)
-		for (i=0; i<NFRAMES; i++) {
-			if (FRAMETABLE[i].count > 0 && i!=frame) {
-				FRAMETABLE[i].count++;
+			//increment counts that are already > 0 (except for count for frame)
+			for (i=0; i<NFRAMES; i++) {
+				if (FRAMETABLE[i].count > 0 && i!=frame) {
+					FRAMETABLE[i].count++;
+				}
 			}
 		}
+
+		printf("Selected frame: %i\n", frame);
+		
+		page_table_set_entry(pt, page, frame, PROT_READ);
 	}
 
-	printf("Selected frame: %i\n", frame);
-
-	//use page replacement algorithm to pick which page to kick out
-	//check if the page that is going to be kicked out has PROT_WRITE set
-	//if so, write page to disk
-	//read from disk to replace page in physical memory
-	//update page table
-	
-	page_table_set_entry(pt, page, frame, PROT_READ|PROT_WRITE);
-
-	//test if set correctly
-	//int frame, bits;
-	//frame = -1;
-	//bits = -1;
-
-	//page_table_get_entry(pt, page, &frame, &bits);
-
-	//printf("%i, %i\n", frame, bits);
 }
 
 int main( int argc, char *argv[] )
