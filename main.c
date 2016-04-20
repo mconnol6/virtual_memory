@@ -55,8 +55,6 @@ void page_fault_handler( struct page_table *pt, int page )
 		//if there is no empty frame, then you need to use an algorithm
 
 		if (frame == -1) {
-
-		
 			//rand
 			if (ALGORITHM == 1) {
 				frame = lrand48() % NFRAMES;
@@ -77,7 +75,9 @@ void page_fault_handler( struct page_table *pt, int page )
 
 		//set count for selected frame to 1
 		FRAMETABLE[frame].count = 1;
+		int current_page = FRAMETABLE[frame].page;
 		FRAMETABLE[frame].page = page;
+		printf("current: %i, page: %i\n", current_page, page);
 
 		//increment counts that are already > 0 (except for count for frame)
 		for (i=0; i<NFRAMES; i++) {
@@ -87,9 +87,22 @@ void page_fault_handler( struct page_table *pt, int page )
 		}
 
 		printf("Selected frame: %i\n", frame);
+
+		//check if the block is dirty if current page is != -1
+		//if so, write data to disk
+		//update page table regardless
+		if (current_page != -1) {
+			int f2, b2;
+			page_table_get_entry(pt, current_page, &f2, &b2);
+			if (b2 == (PROT_READ|PROT_WRITE)) {
+				disk_write(DISK, current_page, &page_table_get_physmem(pt)[frame*BLOCK_SIZE]);
+			}
+			page_table_set_entry(pt, current_page, 0, 0);
+		}
 		
+		//read from disk and update page table
+		disk_read(DISK, page, &page_table_get_physmem(pt)[frame*BLOCK_SIZE]);
 		page_table_set_entry(pt, page, frame, PROT_READ);
-		disk_read(DISK, page, &page_table_get_physmem(pt)[3*BLOCK_SIZE]);
 	}
 
 }
