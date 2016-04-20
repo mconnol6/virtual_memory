@@ -15,13 +15,22 @@ how to use the page table and disk interfaces.
 #include <string.h>
 #include <errno.h>
 
+typedef struct frame_table_entry {
+	int page;
+	int count;
+} frame_table_entry;
+
+
 //global variables
 int ALGORITHM;
 int NFRAMES;
+//struct frame_table_entry *FRAMETABLE;
 int *FRAMETABLE;
 
 void page_fault_handler( struct page_table *pt, int page )
 {
+		
+	printf("page fault on page #%d\n",page);
 
 	int frame;
 
@@ -29,8 +38,40 @@ void page_fault_handler( struct page_table *pt, int page )
 	if (ALGORITHM == 1) {
 		frame = lrand48() % NFRAMES;
 	}
-		
-	printf("page fault on page #%d\n",page);
+
+	//fifo
+	if (ALGORITHM == 2) {
+		int i;
+
+		frame = 0;
+
+		//select frame
+		for (i=0; i<NFRAMES; i++) {
+			//if the frame's count is equal to 0, it is not used
+			if (FRAMETABLE[i] == 0) {
+				frame = i;
+			//else if the current selected frame is not empty, then check and see which frame has the higher count
+			} else if (FRAMETABLE[frame] != 0){
+				if (FRAMETABLE[i] > FRAMETABLE[frame]) {
+					frame = i;
+				}
+
+			}
+
+		}
+
+		//set count for selected frame to 1
+		FRAMETABLE[frame] = 1;
+
+		//increment counts that are already > 0 (except for count for frame)
+		for (i=0; i<NFRAMES; i++) {
+			if (FRAMETABLE[i] > 0 && i!=frame) {
+				FRAMETABLE[i]++;
+			}
+		}
+	}
+
+	printf("Selected frame: %i\n", frame);
 
 	//use page replacement algorithm to pick which page to kick out
 	//check if the page that is going to be kicked out has PROT_WRITE set
@@ -65,10 +106,10 @@ int main( int argc, char *argv[] )
 		ALGORITHM = 1;
 	}
 	if (!strcmp(argv[3], "fifo")) {
-		ALGORITHM = 1;
+		ALGORITHM = 2;
 	}
 	if (!strcmp(argv[3], "custom")) {
-		ALGORITHM = 1;
+		ALGORITHM = 3;
 	}
 	const char *program = argv[4];
 
@@ -91,10 +132,8 @@ int main( int argc, char *argv[] )
 
 	char *physmem = page_table_get_physmem(pt);
 
-	//frame_table keeps track of state of each frame
-	//0 indicates that there is no block in the frame
-	//a number > 0 keeps track of how long the block has been in the frame
-	FRAMETABLE = (int *) malloc(NFRAMES);
+	//FRAMETABLE keeps track of state of each frame
+	FRAMETABLE = calloc(NFRAMES, sizeof(int));
 
 	if(!strcmp(program,"sort")) {
 		sort_program(virtmem,npages*PAGE_SIZE);
@@ -110,8 +149,10 @@ int main( int argc, char *argv[] )
 
 	}
 
-	page_table_print(pt);
+	//page_table_print(pt);
+	exit(1);
 
+	free (FRAMETABLE);
 	page_table_delete(pt);
 	disk_close(disk);
 
