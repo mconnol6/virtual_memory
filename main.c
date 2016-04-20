@@ -24,8 +24,7 @@ typedef struct frame_table_entry {
 //global variables
 int ALGORITHM;
 int NFRAMES;
-//struct frame_table_entry *FRAMETABLE;
-int *FRAMETABLE;
+frame_table_entry *FRAMETABLE;
 
 void page_fault_handler( struct page_table *pt, int page )
 {
@@ -47,12 +46,12 @@ void page_fault_handler( struct page_table *pt, int page )
 
 		//select frame
 		for (i=0; i<NFRAMES; i++) {
-			//if the frame's count is equal to 0, it is not used
-			if (FRAMETABLE[i] == 0) {
+			//if the frame's count is equal to -1, it is not used
+			if (FRAMETABLE[i].count == -1) {
 				frame = i;
 			//else if the current selected frame is not empty, then check and see which frame has the higher count
-			} else if (FRAMETABLE[frame] != 0){
-				if (FRAMETABLE[i] > FRAMETABLE[frame]) {
+			} else if (FRAMETABLE[frame].count != -1){
+				if (FRAMETABLE[i].count > FRAMETABLE[frame].count) {
 					frame = i;
 				}
 
@@ -61,12 +60,13 @@ void page_fault_handler( struct page_table *pt, int page )
 		}
 
 		//set count for selected frame to 1
-		FRAMETABLE[frame] = 1;
+		FRAMETABLE[frame].count = 1;
+		FRAMETABLE[frame].page = page;
 
 		//increment counts that are already > 0 (except for count for frame)
 		for (i=0; i<NFRAMES; i++) {
-			if (FRAMETABLE[i] > 0 && i!=frame) {
-				FRAMETABLE[i]++;
+			if (FRAMETABLE[i].count > 0 && i!=frame) {
+				FRAMETABLE[i].count++;
 			}
 		}
 	}
@@ -132,8 +132,15 @@ int main( int argc, char *argv[] )
 
 	char *physmem = page_table_get_physmem(pt);
 
-	//FRAMETABLE keeps track of state of each frame
-	FRAMETABLE = calloc(NFRAMES, sizeof(int));
+	//FRAMETABLE keeps track of counts for each frame
+	FRAMETABLE = malloc(NFRAMES * sizeof(frame_table_entry));
+
+	//initialize FRAMETABLE values to -1
+	int i;
+	for (i=0; i<NFRAMES; i++) {
+		FRAMETABLE[i].count = -1;
+		FRAMETABLE[i].page = -1;
+	}
 
 	if(!strcmp(program,"sort")) {
 		sort_program(virtmem,npages*PAGE_SIZE);
@@ -149,8 +156,11 @@ int main( int argc, char *argv[] )
 
 	}
 
-	//page_table_print(pt);
-	exit(1);
+	page_table_print(pt);
+
+//	for (i=0; i<NFRAMES; i++) {
+//		printf("%i\n", FRAMETABLE[i].page);
+//	}
 
 	free (FRAMETABLE);
 	page_table_delete(pt);
