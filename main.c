@@ -18,12 +18,12 @@ how to use the page table and disk interfaces.
 typedef struct frame_table_entry {
 	int page;
 	int count; //use for fifo
-	int count2; //use for custom algorithm
 } frame_table_entry;
 
 void update_frame_table(int frame, int page);
 void manage_memory(int page, int frame, int current_page, struct page_table *pt);
 int fifo();
+int custom(struct page_table *pt);
 
 //global variables
 int ALGORITHM;
@@ -77,9 +77,15 @@ void page_fault_handler( struct page_table *pt, int page )
 				if (ALGORITHM == 2) {
 					frame = fifo();
 				}
+
+				//custom algorithm
+				if (ALGORITHM == 3) {
+					frame = custom(pt);
+				}
 			}
 		}
 
+		//update memory and frame table
 		int current_page = FRAMETABLE[frame].page;
 		update_frame_table(frame, page);
 		manage_memory(page, frame, current_page, pt);
@@ -97,6 +103,37 @@ int fifo() {
 			frame = i;
 		}
 
+	}
+	return frame;
+}
+
+//custom algorithm
+int custom(struct page_table *pt) {
+
+	static int prev = 0; //keep track of which page was last loaded
+
+	int frame_selected = 0; //boolean value
+	int frame = 0;
+	int i;
+	int f, b;
+	//select frame by choosing the one with the highest count
+	for (i=0; i<NFRAMES; i++) {
+		int curr_page = FRAMETABLE[i].page;
+		page_table_get_entry(pt, curr_page, &f, &b);
+		//ensure that the dirty bit is not set
+		//and that the page is not the one that was just loaded
+		if (b == (PROT_READ) && i != prev) {
+			frame = i;
+			frame_selected = 1;
+			prev = i;
+			break;
+		}
+
+	}
+
+	//if frame is -1, then no frame was selected, so resort to fifo
+	if (frame_selected == 0) {
+		frame = fifo();
 	}
 	return frame;
 }
@@ -165,8 +202,6 @@ int main( int argc, char *argv[] )
 	}
 	const char *program = argv[4];
 
-	//need to get page replacement algorithm
-
 	DISK = disk_open("myvirtualdisk",npages);
 	if(!DISK) {
 		fprintf(stderr,"couldn't create virtual disk: %s\n",strerror(errno));
@@ -208,19 +243,13 @@ int main( int argc, char *argv[] )
 
 	}
 
-//	page_table_print(pt);
-
-//	for (i=0; i<NFRAMES; i++) {
-//		printf("%i\n", FRAMETABLE[i].page);
-//	}
-
 	free (FRAMETABLE);
 	page_table_delete(pt);
 	disk_close(DISK);
 
-	printf("Total number of page faults: %i\n", NPAGEFAULTS);
-	printf("Total number of disk reads: %i\n", NDISKREADS);
-	printf("Total number of disk writes: %i\n", NDISKWRITES);
+	printf("There were %i reads\n", NDISKREADS);
+	printf("There were %i writes\n", NDISKWRITES);
+	printf("There were %i page faults\n", NPAGEFAULTS);
 
 	return 0;
 }
