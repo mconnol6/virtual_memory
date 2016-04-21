@@ -188,18 +188,34 @@ int main( int argc, char *argv[] )
 	NDISKREADS = 0;
 
 	int npages = atoi(argv[1]);
+
+	if (npages <= 0) {
+		printf("npages must be greater than or equal to 0.\n");
+		exit(1);
+	}
+
 	int nframes = atoi(argv[2]);
+
+	if (nframes <= 1) {
+		printf("nframes must be great than or equal to 1.\n");
+		exit(1);
+	}
+
 	NFRAMES = nframes;
 
 	if (!strcmp(argv[3], "rand")) {
 		ALGORITHM = 1;
 	}
-	if (!strcmp(argv[3], "fifo")) {
+	else if (!strcmp(argv[3], "fifo")) {
 		ALGORITHM = 2;
 	}
-	if (!strcmp(argv[3], "custom")) {
+	else if (!strcmp(argv[3], "custom")) {
 		ALGORITHM = 3;
+	} else {
+		printf("Unknown algorithm: %s\n", argv[3]);
+		exit(1);
 	}
+
 	const char *program = argv[4];
 
 	DISK = disk_open("myvirtualdisk",npages);
@@ -239,7 +255,8 @@ int main( int argc, char *argv[] )
 		focus_program(virtmem,npages*PAGE_SIZE);
 
 	} else {
-		fprintf(stderr,"unknown program: %s\n",argv[3]);
+		fprintf(stderr,"unknown program: %s\n",argv[4]);
+		exit(1);
 
 	}
 
